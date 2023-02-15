@@ -4,8 +4,7 @@ import {
 	ValidationError,
 	ValidationPipe
 } from '@nestjs/common';
-import { HttpExceptionFilter } from 'src/filters/http-exception.filter';
-import { ResponseTransformInterceptor } from 'src/interceptors/response-transform.interceptor';
+import { HttpExceptionFilter } from 'filters/http-exception.filter';
 
 const exceptionFactory = (errors: ValidationError[]) => {
 	throw new BadRequestException(
@@ -19,6 +18,5 @@ const exceptionFactory = (errors: ValidationError[]) => {
 export const applyGlobalMiddleware = (app: INestApplication) => {
 	app.setGlobalPrefix('api');
 	app.useGlobalPipes(new ValidationPipe({ exceptionFactory }));
-	app.useGlobalInterceptors(new ResponseTransformInterceptor());
 	app.useGlobalFilters(new HttpExceptionFilter());
 };

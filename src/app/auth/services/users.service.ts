@@ -1,8 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import { RegisterDto } from 'auth/dto/register.dto';
+import { User, UserDocument } from 'auth/schemas/user.schema';
 import { Model } from 'mongoose';
-import { RegisterDto } from '../dto/register.dto';
-import { User, UserDocument } from '../schemas/user.schema';
 import { RoleService } from './role.service';
 
 @Injectable()
@@ -67,5 +67,16 @@ export class UserService {
 		}
 
 		return user;
+	}
+
+	/**
+	 * Update user password
+	 * @param email User's email
+	 * @param password New password
+	 */
+	async updatePassword(email: string, password: string) {
+		await this.findOneOrFailByEmail(email);
+
+		await this.userModel.updateOne({ email }, { password }).exec();
 	}
 }

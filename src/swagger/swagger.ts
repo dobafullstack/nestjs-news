@@ -1,7 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { Role } from 'src/app/auth/schemas/role.schema';
-import { User } from 'src/app/auth/schemas/user.schema';
+import { Role } from 'auth/schemas/role.schema';
+import { User } from 'auth/schemas/user.schema';
 
 export const useSwagger = (app: INestApplication) => {
 	const config = new DocumentBuilder()
@@ -15,5 +15,25 @@ export const useSwagger = (app: INestApplication) => {
 		extraModels: [User, Role]
 	});
 
-	SwaggerModule.setup('docs', app, document);
+	//Sort method
+	SwaggerModule.setup('docs', app, document, {
+		swaggerOptions: {
+			operationsSorter: (a, b) => {
+				var methodsOrder = [
+					'get',
+					'post',
+					'put',
+					'patch',
+					'delete',
+					'options',
+					'trace'
+				];
+				var result =
+					methodsOrder.indexOf(a.get('method')) -
+					methodsOrder.indexOf(b.get('method'));
+
+				return result;
+			}
+		}
+	});
 };

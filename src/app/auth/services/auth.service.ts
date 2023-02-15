@@ -4,11 +4,14 @@ import {
 	UnauthorizedException
 } from '@nestjs/common';
 import * as argon2 from 'argon2';
-import * as jwt from 'jsonwebtoken';
-import { JWT_EXPIRE } from '../../../constants/constant';
-import { LoginDto } from '../dto/login.dto';
-import { RegisterDto } from '../dto/register.dto';
-import { User } from '../schemas/user.schema';
+import { LoginDto } from 'auth/dto/login.dto';
+import { RegisterDto } from 'auth/dto/register.dto';
+import { ResetPasswordDto } from 'auth/dto/reset-password.dto';
+import { User } from 'auth/schemas/user.schema';
+import { generateString } from 'helpers/generate-code.helper';
+import { JwtHelper } from 'helpers/jwt.helper';
+import { MailService } from 'mail/mail.service';
+import { OtpService } from './opt.service';
 import { TokenService } from './token.service';
 import { UserService } from './users.service';
 
@@ -16,7 +19,9 @@ import { UserService } from './users.service';
 export class AuthService {
 	constructor(
 		private readonly userService: UserService,
-		private readonly tokenService: TokenService
+		private readonly tokenService: TokenService,
+		private readonly mailService: MailService,
+		private readonly otpService: OtpService
 	) {}
 
 	/**
@@ -68,13 +73,9 @@ export class AuthService {
 			]);
 		}
 
-		const accessToken = jwt.sign(
-			{ user_id: user._id },
-			process.env.SECRET_JWT,
-			{
-				expiresIn: JWT_EXPIRE
-			}
-		);
+		const { accessToken, expiresIn } = JwtHelper.sign({
+			user_id: user._id
+		});
 
 		if (remember_me) {
 			const { refreshToken } = await this.tokenService.findOneOrCreate(
@@ -84,13 +85,70 @@ export class AuthService {
 			return {
 				accessToken,
 				refreshToken,
-				expiresIn: JWT_EXPIRE
+				expiresIn
 			};
 		}
 
 		return {
 			accessToken,
-			expiresIn: JWT_EXPIRE
+			expiresIn
 		};
+	}
+
+	/**
+	 * Refresh access token
+	 * @returns `Promise<{ accessToken, expiresIn }>`
+	 */
+	async refresherToken(user_id: string, refreshToken: string) {
+		const token = await this.tokenService.findOneOrFailByUserIdAndToken(
+			user_id,
+			refreshToken
+		);
+
+		return new Promise<{
+			accessToken: string;
+			expiresIn: number;
+		}>((resolve) => {
+			JwtHelper.verify(token.refreshToken, (decode) => {
+				const { accessToken, expiresIn } = JwtHelper.sign({
+					user_id: decode.user_id
+				});
+
+				resolve({
+					accessToken,
+					expiresIn: expiresIn as number
+				});
+			});
+		});
+	}
+
+	/**
+	 * Send an email include OTP code
+	 * @param email User's email
+	 */
+	async forgotPassword(email: string) {
+		const code = generateString();
+
+		await this.userService.findOneOrFailByEmail(email);
+
+		await this.otpService.create(email, code);
+
+		await this.mailService.sendMailForgotPassword(email, code);
+	}
+
+	/**
+	 * Reset password by code was sent via email
+	 * @param body ResetPasswordDto { code, password }
+	 */
+	async resetPassword(body: ResetPasswordDto) {
+		const { code, password } = body;
+
+		const { email } = await this.otpService.findOneOrFail(code);
+
+		const hashedPassword = await argon2.hash(password);
+
+		await this.userService.updatePassword(email, hashedPassword);
+
+		await this.otpService.remove(email, code);
 	}
 }
